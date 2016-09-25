@@ -1,0 +1,309 @@
+<html>
+    <head>
+        <title>Days Board</title>
+        <link rel="stylesheet" type="text/css" href="https://cloud.webtype.com/css/e3348ae0-a196-45c6-8abf-8157c8d62fd8.css" />
+        <style>
+            body { height: 100%; background-color: #405665; color: #63b246; font-family: Antenna }
+            #calendar { debug-background-color: black; height: 80%; width: 100% }
+                #month_labels { debug-background-color: red; height: 10%; }
+                    .month_label { debug-background-color: purple; height: 100%; width: 6%; float: right; display: flex; align-items: center; font-size: 4vw }
+                #timeline { debug-background-color: yellow; height: 90%; }
+                    #day_labels { debug-background-color: green; height: 100%; float: left; width: 10%; }
+                        .day_label { height: 14%; display: flex; justify-content: center; align-items: center; font-size: 4vw }
+                    #days { debug-background-color: blue; height: 100% }
+                        .day_row { height: 14% }
+                            .day {
+                                width: 5.5%; float: right;
+                                margin-right: 0.5%;
+                                margin-bottom: 0.5%;
+                            }
+                                .square { border-width: medium; border-style: solid; background-color: #63b246; border-color: #509439; height: 80% }
+                                .future { background-color: darkgray; border-color: gray; }
+                                .bad    { background-color: crimson; border-color: darkred; }
+            #streaks { debug-background-color: gray; height: 20%; display: flex; justify-content: center; align-items: center; font-size: 6vw; clear: both; }
+                .streak_current { color: #66ff00; font-weight: bold; }
+                .streak_record  { color: #66ff00; font-weight: bold; }
+        </style>
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.15.1/moment.min.js"></script>
+        <script>
+            "use strict";
+            var testingIncidentData = {
+                "longest_streak": {"bad": 100},
+                "days": {"bad": [ "2016-09-11" ]}
+            };
+            function loadIncidentData(url) {
+                var options = { "method": "GET",
+                                "mode": "cors",
+                                "cache": "reload" };
+                fetch(url, options).then(function(response) {
+                  var contentType = response.headers.get("content-type");
+                  if (contentType && contentType.indexOf("application/json") !== -1) {
+                    return response.json().then(fillCalendar);
+                  } else {
+                    console.log("Failed to load: " + url + ". This won't be pretty.");
+                    fillCalendar(testingIncidentData);
+                  }
+              }, function(reason) {
+                    console.log("Failed to load: " + url + ": " + reason);
+                    fillCalendar(testingIncidentData);
+              });
+            }
+            function fillCalendar(incidentData) {
+                var boardData = incidentToBoardData(incidentData);
+                fillMonthLabels(boardData);
+                fillDays(boardData);
+                fillStreaks(boardData);
+            }
+            function fillDays(bd) {
+                for (var day_type in  bd['days']) {
+                    for (var ii = 0; ii < bd['days'][day_type].length; ii++) {
+                        var day = bd['days'][day_type][ii];
+                        var key = "r" + day['row'] + "c" + day['col'];
+                        var elem = document.getElementById(key);
+                        if (elem != null) {
+                            elem.classList.add(day_type);
+                        }
+                    }
+                }
+            }
+            function fillMonthLabels(bd) {
+                for (var ii = 0; ii < bd['month_labels'].length; ii++) {
+                    var key = "c" + bd['month_labels'][ii]['col'];
+                    var elem = document.getElementById(key);
+                    if (elem != null) {
+                        elem.innerHTML = bd['month_labels'][ii]['label'];
+                    }
+                }
+            }
+            function fillStreaks(bd) {
+                for (var streak_type in  bd['current_streak']) {
+                    var key = streak_type + "_current";
+                    var elem = document.getElementById(key);
+                    if (elem != null) {
+                        elem.innerHTML = bd['current_streak'][streak_type];
+                    }
+                }
+                for (var streak_type in  bd['longest_streak']) {
+                    key = streak_type + "_record";
+                    elem = document.getElementById(key);
+                    if (elem != null) {
+                        elem.innerHTML = bd['longest_streak'][streak_type];
+                    }
+                }
+            }
+            function treatAsUTC(theDate) {
+                var result = new Date(theDate);
+                result.setMinutes(result.getMinutes() - result.getTimezoneOffset());
+                return result;
+            }
+            function daysBetween(endDate, startDate) {
+                var millisecondsPerDay = 24 * 60 * 60 * 1000;
+                return (treatAsUTC(endDate) - treatAsUTC(startDate)) / millisecondsPerDay;
+            }
+            function dateToPos(theDate, today) {
+                var row = theDate.day();
+                var this_saturday = today.clone().day("Saturday");
+                var days_delta = daysBetween(this_saturday, theDate);
+                var col = Math.floor(days_delta / 7);
+                return {"row": row, "col": col, "date": theDate.clone()};
+            }
+            function incidentToBoardData(id) {
+                var today = new moment().hours(0).minutes(0).seconds(0).milliseconds(0).add(1, "days");
+                var retval = {
+                    "days": {},
+                    "current_streak": {},
+                    "month_labels": [],
+                    "longest_streak": id["longest_streak"]
+                };
+                for (var day_type in id["days"]) {
+                    retval["days"][day_type] = [];
+                    for (var day_idx=0; day_idx < id["days"][day_type].length; day_idx++) {
+                        var day = new moment(id["days"][day_type][day_idx] + " UTC");
+                        var day_pos = dateToPos(day, today);
+                        retval["days"][day_type].push(day_pos);
+                    }
+                    retval["current_streak"][day_type] = daysBetween(today, retval["days"][day_type][0]["date"]);
+                }
+                var this_saturday = today.clone().day("Saturday");
+                retval["days"]["future"] = [];
+                for (var future = today.clone(); future <= this_saturday; future.add(1, "days")) {
+                    retval["days"]["future"].push(dateToPos(future, today));
+                }
+                var firstOfMonth = today.clone().date(1);
+                for (var monthsBack=0; monthsBack < 12; monthsBack++) {
+                    retval["month_labels"].push({
+                        "label": firstOfMonth.format("MMM"),
+                        "col"  : dateToPos(firstOfMonth, today)["col"]
+                    });
+                    firstOfMonth.subtract(1, "month");
+                }
+                return (retval);
+            }
+            function onLoad() {
+                loadIncidentData("incident_data.json");
+                setTimeout('document.location = document.location', 1000 * 3600);
+            }
+            window.onload = onLoad;
+        </script>
+    </head>
+    <body>
+        <div id="calendar">
+            <div id="month_labels">
+                <div class="month_label" id="c0"></div>
+                <div class="month_label" id="c1"></div>
+                <div class="month_label" id="c2"></div>
+                <div class="month_label" id="c3"></div>
+                <div class="month_label" id="c4"></div>
+                <div class="month_label" id="c5"></div>
+                <div class="month_label" id="c6"></div>
+                <div class="month_label" id="c7"></div>
+                <div class="month_label" id="c8"></div>
+                <div class="month_label" id="c9"></div>
+                <div class="month_label" id="c10"></div>
+                <div class="month_label" id="c11"></div>
+                <div class="month_label" id="c12"></div>
+                <div class="month_label" id="c13"></div>
+                <div class="month_label" id="c14"></div>
+            </div>
+            <div id="timeline">
+                <div id="day_labels">
+                    <div class="day_label">S</div>
+                    <div class="day_label">M</div>
+                    <div class="day_label">T</div>
+                    <div class="day_label">W</div>
+                    <div class="day_label">T</div>
+                    <div class="day_label">F</div>
+                    <div class="day_label">S</div>
+                </div>
+                <div id="days">
+                    <div class="day_row">
+                        <div class="day"><div class="square" id="r0c0"></div></div>
+                        <div class="day"><div class="square" id="r0c1"></div></div>
+                        <div class="day"><div class="square" id="r0c2"></div></div>
+                        <div class="day"><div class="square" id="r0c3"></div></div>
+                        <div class="day"><div class="square" id="r0c4"></div></div>
+                        <div class="day"><div class="square" id="r0c5"></div></div>
+                        <div class="day"><div class="square" id="r0c6"></div></div>
+                        <div class="day"><div class="square" id="r0c7"></div></div>
+                        <div class="day"><div class="square" id="r0c8"></div></div>
+                        <div class="day"><div class="square" id="r0c9"></div></div>
+                        <div class="day"><div class="square" id="r0c10"></div></div>
+                        <div class="day"><div class="square" id="r0c11"></div></div>
+                        <div class="day"><div class="square" id="r0c12"></div></div>
+                        <div class="day"><div class="square" id="r0c13"></div></div>
+                        <div class="day"><div class="square" id="r0c14"></div></div>
+                    </div>
+                    <div class="day_row">
+                        <div class="day"><div class="square" id="r1c0"></div></div>
+                        <div class="day"><div class="square" id="r1c1"></div></div>
+                        <div class="day"><div class="square" id="r1c2"></div></div>
+                        <div class="day"><div class="square" id="r1c3"></div></div>
+                        <div class="day"><div class="square" id="r1c4"></div></div>
+                        <div class="day"><div class="square" id="r1c5"></div></div>
+                        <div class="day"><div class="square" id="r1c6"></div></div>
+                        <div class="day"><div class="square" id="r1c7"></div></div>
+                        <div class="day"><div class="square" id="r1c8"></div></div>
+                        <div class="day"><div class="square" id="r1c9"></div></div>
+                        <div class="day"><div class="square" id="r1c10"></div></div>
+                        <div class="day"><div class="square" id="r1c11"></div></div>
+                        <div class="day"><div class="square" id="r1c12"></div></div>
+                        <div class="day"><div class="square" id="r1c13"></div></div>
+                        <div class="day"><div class="square" id="r1c14"></div></div>
+                    </div>
+                    <div class="day_row">
+                        <div class="day"><div class="square" id="r2c0"></div></div>
+                        <div class="day"><div class="square" id="r2c1"></div></div>
+                        <div class="day"><div class="square" id="r2c2"></div></div>
+                        <div class="day"><div class="square" id="r2c3"></div></div>
+                        <div class="day"><div class="square" id="r2c4"></div></div>
+                        <div class="day"><div class="square" id="r2c5"></div></div>
+                        <div class="day"><div class="square" id="r2c6"></div></div>
+                        <div class="day"><div class="square" id="r2c7"></div></div>
+                        <div class="day"><div class="square" id="r2c8"></div></div>
+                        <div class="day"><div class="square" id="r2c9"></div></div>
+                        <div class="day"><div class="square" id="r2c10"></div></div>
+                        <div class="day"><div class="square" id="r2c11"></div></div>
+                        <div class="day"><div class="square" id="r2c12"></div></div>
+                        <div class="day"><div class="square" id="r2c13"></div></div>
+                        <div class="day"><div class="square" id="r2c14"></div></div>
+                    </div>
+                    <div class="day_row">
+                        <div class="day"><div class="square" id="r3c0"></div></div>
+                        <div class="day"><div class="square" id="r3c1"></div></div>
+                        <div class="day"><div class="square" id="r3c2"></div></div>
+                        <div class="day"><div class="square" id="r3c3"></div></div>
+                        <div class="day"><div class="square" id="r3c4"></div></div>
+                        <div class="day"><div class="square" id="r3c5"></div></div>
+                        <div class="day"><div class="square" id="r3c6"></div></div>
+                        <div class="day"><div class="square" id="r3c7"></div></div>
+                        <div class="day"><div class="square" id="r3c8"></div></div>
+                        <div class="day"><div class="square" id="r3c9"></div></div>
+                        <div class="day"><div class="square" id="r3c10"></div></div>
+                        <div class="day"><div class="square" id="r3c11"></div></div>
+                        <div class="day"><div class="square" id="r3c12"></div></div>
+                        <div class="day"><div class="square" id="r3c13"></div></div>
+                        <div class="day"><div class="square" id="r3c14"></div></div>
+                    </div>
+                    <div class="day_row">
+                        <div class="day"><div class="square" id="r4c0"></div></div>
+                        <div class="day"><div class="square" id="r4c1"></div></div>
+                        <div class="day"><div class="square" id="r4c2"></div></div>
+                        <div class="day"><div class="square" id="r4c3"></div></div>
+                        <div class="day"><div class="square" id="r4c4"></div></div>
+                        <div class="day"><div class="square" id="r4c5"></div></div>
+                        <div class="day"><div class="square" id="r4c6"></div></div>
+                        <div class="day"><div class="square" id="r4c7"></div></div>
+                        <div class="day"><div class="square" id="r4c8"></div></div>
+                        <div class="day"><div class="square" id="r4c9"></div></div>
+                        <div class="day"><div class="square" id="r4c10"></div></div>
+                        <div class="day"><div class="square" id="r4c11"></div></div>
+                        <div class="day"><div class="square" id="r4c12"></div></div>
+                        <div class="day"><div class="square" id="r4c13"></div></div>
+                        <div class="day"><div class="square" id="r4c14"></div></div>
+                    </div>
+                    <div class="day_row">
+                        <div class="day"><div class="square" id="r5c0"></div></div>
+                        <div class="day"><div class="square" id="r5c1"></div></div>
+                        <div class="day"><div class="square" id="r5c2"></div></div>
+                        <div class="day"><div class="square" id="r5c3"></div></div>
+                        <div class="day"><div class="square" id="r5c4"></div></div>
+                        <div class="day"><div class="square" id="r5c5"></div></div>
+                        <div class="day"><div class="square" id="r5c6"></div></div>
+                        <div class="day"><div class="square" id="r5c7"></div></div>
+                        <div class="day"><div class="square" id="r5c8"></div></div>
+                        <div class="day"><div class="square" id="r5c9"></div></div>
+                        <div class="day"><div class="square" id="r5c10"></div></div>
+                        <div class="day"><div class="square" id="r5c11"></div></div>
+                        <div class="day"><div class="square" id="r5c12"></div></div>
+                        <div class="day"><div class="square" id="r5c13"></div></div>
+                        <div class="day"><div class="square" id="r5c14"></div></div>
+                    </div>
+                    <div class="day_row">
+                        <div class="day"><div class="square" id="r6c0"></div></div>
+                        <div class="day"><div class="square" id="r6c1"></div></div>
+                        <div class="day"><div class="square" id="r6c2"></div></div>
+                        <div class="day"><div class="square" id="r6c3"></div></div>
+                        <div class="day"><div class="square" id="r6c4"></div></div>
+                        <div class="day"><div class="square" id="r6c5"></div></div>
+                        <div class="day"><div class="square" id="r6c6"></div></div>
+                        <div class="day"><div class="square" id="r6c7"></div></div>
+                        <div class="day"><div class="square" id="r6c8"></div></div>
+                        <div class="day"><div class="square" id="r6c9"></div></div>
+                        <div class="day"><div class="square" id="r6c10"></div></div>
+                        <div class="day"><div class="square" id="r6c11"></div></div>
+                        <div class="day"><div class="square" id="r6c12"></div></div>
+                        <div class="day"><div class="square" id="r6c13"></div></div>
+                        <div class="day"><div class="square" id="r6c14"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="streaks">
+            <p><span id="bad.label">Days Up</span>:
+            Current: <span id="bad_current" class="streak_current">XX</span>
+            |
+            Record: <span id="bad_record" class="streak_record">YY</span>
+            </p>
+        </div>
+    </body>
+</html>
