@@ -20,7 +20,7 @@
                                 .square { border-width: medium; border-style: solid; background-color: #63b246; border-color: #509439; height: 80% }
                                 .future { background-color: darkgray; border-color: gray; }
                                 .bad    { background-color: crimson; border-color: darkred; }
-            #streaks { debug-background-color: gray; height: 20%; display: flex; justify-content: center; align-items: center; font-size: 6vw; clear: both; }
+            #streaks { debug-background-color: gray; height: 20%; display: flex; justify-content: center; align-items: center; font-size: 5.5vw; clear: both; }
                 .streak_current { color: #66ff00; font-weight: bold; }
                 .streak_record  { color: #66ff00; font-weight: bold; }
         </style>
@@ -108,13 +108,18 @@
                 return {"row": row, "col": col, "date": theDate.clone()};
             }
             function incidentToBoardData(id) {
-                var today = new moment().hours(0).minutes(0).seconds(0).milliseconds(0).add(1, "days");
+                var today = new moment().hours(0).minutes(0).seconds(0).milliseconds(0);
                 var retval = {
                     "days": {},
                     "current_streak": {},
                     "month_labels": [],
                     "longest_streak": id["longest_streak"]
                 };
+                var this_saturday = today.clone().day("Saturday");
+                retval["days"]["future"] = [];
+                for (var future = today.clone(); future <= this_saturday; future.add(1, "days")) {
+                    retval["days"]["future"].push(dateToPos(future, today));
+                }
                 for (var day_type in id["days"]) {
                     retval["days"][day_type] = [];
                     for (var day_idx=0; day_idx < id["days"][day_type].length; day_idx++) {
@@ -122,12 +127,7 @@
                         var day_pos = dateToPos(day, today);
                         retval["days"][day_type].push(day_pos);
                     }
-                    retval["current_streak"][day_type] = daysBetween(today, retval["days"][day_type][0]["date"]);
-                }
-                var this_saturday = today.clone().day("Saturday");
-                retval["days"]["future"] = [];
-                for (var future = today.clone(); future <= this_saturday; future.add(1, "days")) {
-                    retval["days"]["future"].push(dateToPos(future, today));
+                    retval["current_streak"][day_type] = Math.max(0, daysBetween(today, retval["days"][day_type][0]["date"])-1);
                 }
                 var firstOfMonth = today.clone().date(1);
                 for (var monthsBack=0; monthsBack < 12; monthsBack++) {
