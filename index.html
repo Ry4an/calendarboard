@@ -87,7 +87,9 @@
                     key = streak_type + "_record";
                     elem = document.getElementById(key);
                     if (elem != null) {
-                        elem.innerHTML = bd['longest_streak'][streak_type];
+                        elem.innerHTML = Math.max(
+                                bd['longest_streak'][streak_type],
+                                bd['current_streak'][streak_type]);
                     }
                 }
             }
